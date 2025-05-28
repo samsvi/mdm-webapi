@@ -1,0 +1,9 @@
+internal/mdm/README.md
+internal/mdm/api_medical_records.go
+internal/mdm/api_patients.go
+internal/mdm/model_address.go
+internal/mdm/model_emergency_contact.go
+internal/mdm/model_medical_record.go
+internal/mdm/model_medication.go
+internal/mdm/model_patient.go
+internal/mdm/routers.go
