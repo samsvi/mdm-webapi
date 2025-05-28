@@ -1,0 +1,553 @@
+openapi: 3.0.0
+servers:
+  - description: Cluster Endpoint
+    url: /api
+info:
+  description: Patient and Medical Records management for Web-In-Cloud system
+  version: '1.0.0'
+  title: Patient Management Api
+  contact:
+    email: your-email@example.com
+  license:
+    name: CC BY 4.0
+    url: 'https://creativecommons.org/licenses/by/4.0/'
+tags:
+  - name: patients
+    description: Patient management API
+  - name: medicalRecords
+    description: Medical records management API
+paths:
+  '/patients':
+    get:
+      tags:
+        - patients
+      summary: Provides list of all patients
+      operationId: getAllPatients
+      description: Returns a list of all patients in the system
+      responses:
+        '200':
+          description: List of all patients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Patient'
+              examples:
+                response:
+                  $ref: '#/components/examples/PatientsListExample'
+    post:
+      tags:
+        - patients
+      summary: Creates a new patient
+      operationId: createPatient
+      description: Use this method to create a new patient record
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+            examples:
+              request-sample:
+                $ref: '#/components/examples/PatientExample'
+        description: Patient data to create
+        required: true
+      responses:
+        '201':
+          description: Patient successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+              examples:
+                created-response:
+                  $ref: '#/components/examples/PatientExample'
+        '400':
+          description: Missing mandatory properties of input object
+        '409':
+          description: Patient with the specified ID already exists
+  '/patients/{patientId}':
+    get:
+      tags:
+        - patients
+      summary: Provides details about specific patient
+      operationId: getPatient
+      description: Returns detailed information about a specific patient by ID
+      parameters:
+        - in: path
+          name: patientId
+          description: Unique identifier of the patient
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+              examples:
+                response:
+                  $ref: '#/components/examples/PatientExample'
+        '404':
+          description: Patient with such ID does not exist
+    put:
+      tags:
+        - patients
+      summary: Updates specific patient
+      operationId: updatePatient
+      description: Use this method to update patient information
+      parameters:
+        - in: path
+          name: patientId
+          description: Unique identifier of the patient
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+            examples:
+              request:
+                $ref: '#/components/examples/PatientExample'
+        description: Patient data to update
+        required: true
+      responses:
+        '200':
+          description: Patient successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+              examples:
+                response:
+                  $ref: '#/components/examples/PatientExample'
+        '400':
+          description: Invalid input data
+        '403':
+          description: Patient ID in path and request body do not match
+        '404':
+          description: Patient with such ID does not exist
+    delete:
+      tags:
+        - patients
+      summary: Deletes specific patient
+      operationId: deletePatient
+      description: Use this method to delete a patient from the system
+      parameters:
+        - in: path
+          name: patientId
+          description: Unique identifier of the patient
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Patient deleted successfully
+        '404':
+          description: Patient with such ID does not exist
+  '/patients/{patientId}/medical-records':
+    get:
+      tags:
+        - medicalRecords
+      summary: Provides all medical records for specific patient
+      operationId: getPatientMedicalRecords
+      description: Returns all medical records associated with a specific patient
+      parameters:
+        - in: path
+          name: patientId
+          description: Unique identifier of the patient
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of patient's medical records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+              examples:
+                response:
+                  $ref: '#/components/examples/MedicalRecordsListExample'
+        '404':
+          description: Patient with such ID does not exist
+    post:
+      tags:
+        - medicalRecords
+      summary: Creates new medical record for patient
+      operationId: createMedicalRecord
+      description: Use this method to create a new medical record for a specific patient
+      parameters:
+        - in: path
+          name: patientId
+          description: Unique identifier of the patient
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecord'
+            examples:
+              request-sample:
+                $ref: '#/components/examples/MedicalRecordExample'
+        description: Medical record data to create
+        required: true
+      responses:
+        '201':
+          description: Medical record successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+              examples:
+                created-response:
+                  $ref: '#/components/examples/MedicalRecordExample'
+        '400':
+          description: Missing mandatory properties of input object
+        '404':
+          description: Patient with such ID does not exist
+        '409':
+          description: Medical record with the specified ID already exists
+  '/patients/{patientId}/medical-records/{recordId}':
+    put:
+      tags:
+        - medicalRecords
+      summary: Updates specific medical record
+      operationId: updateMedicalRecord
+      description: Use this method to update a specific medical record
+      parameters:
+        - in: path
+          name: patientId
+          description: Unique identifier of the patient
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: recordId
+          description: Unique identifier of the medical record
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecord'
+            examples:
+              request:
+                $ref: '#/components/examples/MedicalRecordExample'
+        description: Medical record data to update
+        required: true
+      responses:
+        '200':
+          description: Medical record successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+              examples:
+                response:
+                  $ref: '#/components/examples/MedicalRecordExample'
+        '400':
+          description: Invalid input data
+        '403':
+          description: Record ID in path and request body do not match
+        '404':
+          description: Patient or Medical record with such ID does not exist
+    delete:
+      tags:
+        - medicalRecords
+      summary: Deletes specific medical record
+      operationId: deleteMedicalRecord
+      description: Use this method to delete a specific medical record
+      parameters:
+        - in: path
+          name: patientId
+          description: Unique identifier of the patient
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: recordId
+          description: Unique identifier of the medical record
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Medical record deleted successfully
+        '404':
+          description: Patient or Medical record with such ID does not exist
+components:
+  schemas:
+    Patient:
+      type: object
+      required: [id, firstName, lastName, dateOfBirth, gender, insuranceNumber]
+      properties:
+        id:
+          type: string
+          example: 'pat123456'
+          description: Unique identifier of the patient
+        firstName:
+          type: string
+          example: 'Ján'
+          description: First name of the patient
+        lastName:
+          type: string
+          example: 'Novák'
+          description: Last name of the patient
+        dateOfBirth:
+          type: string
+          format: date
+          example: '1990-01-01'
+          description: Date of birth
+        gender:
+          type: string
+          enum: [M, F, O]
+          example: 'M'
+          description: Gender (M - male, F - female, O - other)
+        insuranceNumber:
+          type: string
+          example: '900101/1234'
+          description: Insurance number (rodné číslo)
+        bloodType:
+          type: string
+          enum: [A+, A-, B+, B-, AB+, AB-, O+, O-]
+          example: 'A+'
+          description: Blood type
+        status:
+          type: string
+          enum: [Stable, Critical, Recovering, Discharged]
+          example: 'Stable'
+          description: Current patient status
+        allergies:
+          type: string
+          example: 'Penicilín, arašidy'
+          description: Patient allergies (free text)
+        medicalNotes:
+          type: string
+          example: 'Pacient má chronické problémy s tlakom'
+          description: General medical notes (free text)
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+          description: When the patient record was created
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2024-01-20T14:15:00Z'
+          description: When the patient record was last updated
+      example:
+        $ref: '#/components/examples/PatientExample'
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+          example: 'Hlavná 123'
+          description: Street name and number
+        city:
+          type: string
+          example: 'Bratislava'
+          description: City
+        postalCode:
+          type: string
+          example: '81101'
+          description: Postal code
+        country:
+          type: string
+          example: 'Slovensko'
+          description: Country
+      example:
+        street: 'Hlavná 123'
+        city: 'Bratislava'
+        postalCode: '81101'
+        country: 'Slovensko'
+    EmergencyContact:
+      type: object
+      properties:
+        name:
+          type: string
+          example: 'Mária Nováková'
+          description: Name of emergency contact
+        relationship:
+          type: string
+          example: 'manželka'
+          description: Relationship to patient
+        phoneNumber:
+          type: string
+          example: '+421907654321'
+          description: Phone number of emergency contact
+      example:
+        name: 'Mária Nováková'
+        relationship: 'manželka'
+        phoneNumber: '+421907654321'
+    MedicalRecord:
+      type: object
+      required: [id, patientId, dateOfVisit, diagnosis]
+      properties:
+        id:
+          type: string
+          example: 'rec789012'
+          description: Unique identifier of the medical record
+        patientId:
+          type: string
+          example: 'pat123456'
+          description: Unique identifier of the patient
+        dateOfVisit:
+          type: string
+          format: date-time
+          example: '2024-05-15T09:30:00Z'
+          description: Date and time of the medical visit
+        diagnosis:
+          type: string
+          example: 'Akútna respiračná infekcia'
+          description: Primary diagnosis
+        symptoms:
+          type: array
+          items:
+            type: string
+          example: ['kašeľ', 'teploty', 'bolesti hrdla']
+          description: List of reported symptoms
+        treatment:
+          type: string
+          example: 'Predpísané antibiotiká, odpočinok, zvýšený príjem tekutín'
+          description: Prescribed treatment
+        medications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Medication'
+          description: List of prescribed medications
+        doctorName:
+          type: string
+          example: 'Dr. Peter Kováč'
+          description: Name of the attending physician
+        notes:
+          type: string
+          example: 'Pacient má alergiu na penicilín'
+          description: Additional notes
+        followUpDate:
+          type: string
+          format: date
+          example: '2024-05-22'
+          description: Date for follow-up appointment
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-05-15T09:30:00Z'
+          description: When the record was created
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2024-05-15T09:30:00Z'
+          description: When the record was last updated
+      example:
+        $ref: '#/components/examples/MedicalRecordExample'
+    Medication:
+      type: object
+      properties:
+        name:
+          type: string
+          example: 'Amoxicillin'
+          description: Name of the medication
+        dosage:
+          type: string
+          example: '500mg'
+          description: Dosage amount
+        frequency:
+          type: string
+          example: '3x denne'
+          description: How often to take the medication
+        duration:
+          type: string
+          example: '7 dní'
+          description: Duration of treatment
+      example:
+        name: 'Amoxicillin'
+        dosage: '500mg'
+        frequency: '3x denne'
+        duration: '7 dní'
+  examples:
+    PatientExample:
+      summary: Sample patient record
+      description: Example of a patient record with complete information
+      value:
+        id: 'pat123456'
+        firstName: 'Ján'
+        lastName: 'Novák'
+        dateOfBirth: '1990-01-01'
+        gender: 'M'
+        insuranceNumber: '900101/1234'
+        bloodType: 'A+'
+        status: 'Stable'
+        allergies: 'Penicilín, arašidy'
+        medicalNotes: 'Pacient má chronické problémy s tlakom'
+        createdAt: '2024-01-15T10:30:00Z'
+        updatedAt: '2024-01-20T14:15:00Z'
+    PatientsListExample:
+      summary: List of patients
+      description: Example list containing multiple patients
+      value:
+        - id: 'pat123456'
+          firstName: 'Ján'
+          lastName: 'Novák'
+          dateOfBirth: '1990-01-01'
+          gender: 'M'
+          insuranceNumber: '900101/1234'
+          bloodType: 'A+'
+          status: 'Stable'
+        - id: 'pat789012'
+          firstName: 'Anna'
+          lastName: 'Svobodová'
+          dateOfBirth: '1985-03-15'
+          gender: 'F'
+          insuranceNumber: '850315/5678'
+          bloodType: 'O-'
+          status: 'Recovering'
+    MedicalRecordExample:
+      summary: Sample medical record
+      description: Example of a complete medical record
+      value:
+        id: 'rec789012'
+        patientId: 'pat123456'
+        dateOfVisit: '2024-05-15T09:30:00Z'
+        diagnosis: 'Akútna respiračná infekcia'
+        symptoms: ['kašeľ', 'teploty', 'bolesti hrdla']
+        treatment: 'Predpísané antibiotiká, odpočinok, zvýšený príjem tekutín'
+        medications:
+          - name: 'Amoxicillin'
+            dosage: '500mg'
+            frequency: '3x denne'
+            duration: '7 dní'
+          - name: 'Ibuprofen'
+            dosage: '400mg'
+            frequency: 'podľa potreby pri bolesti'
+            duration: 'maximálne 5 dní'
+        doctorName: 'Dr. Peter Kováč'
+        notes: 'Pacient má alergiu na penicilín'
+        followUpDate: '2024-05-22'
+        createdAt: '2024-05-15T09:30:00Z'
+        updatedAt: '2024-05-15T09:30:00Z'
+    MedicalRecordsListExample:
+      summary: List of medical records for patient
+      description: Example list of medical records for a specific patient
+      value:
+        - id: 'rec789012'
+          patientId: 'pat123456'
+          dateOfVisit: '2024-05-15T09:30:00Z'
+          diagnosis: 'Akútna respiračná infekcia'
+          doctorName: 'Dr. Peter Kováč'
+        - id: 'rec789013'
+          patientId: 'pat123456'
+          dateOfVisit: '2024-03-10T14:00:00Z'
+          diagnosis: 'Preventívna prehliadka'
+          doctorName: 'Dr. Eva Horáková'
