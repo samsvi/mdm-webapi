@@ -2,21 +2,21 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- deployment.yaml
-- service.yaml
+  - deployment.yaml
+  - service.yaml
 
 configMapGenerator:
-  - name: sses-ambulance-webapi-mongodb-init
+  - name: mdm-webapi-mongodb-init
     files:
       - params/init-db.js
-  - name: sses-ambulance-webapi-config
+  - name: mdm-webapi-config
     literals:
-      - database=sses-ambulance
+      - database=mdm-patient-management
       - collection=ambulance
 patches:
-- path: patches/webapi.deployment.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: sses-ambulance-webapi
+  - path: patches/webapi.deployment.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: mdm-webapi
