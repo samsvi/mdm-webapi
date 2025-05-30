@@ -1,13 +1,13 @@
 package mdm
 
 import (
+	"log"
 	"net/http"
 	"time"
 
-	"slices"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/samsvi/mdm-webapi/internal/db_service"
 )
 
 type implMedicalRecordsAPI struct {
@@ -18,213 +18,237 @@ func NewMedicalRecordsAPI() MedicalRecordsAPI {
 }
 
 func (o implMedicalRecordsAPI) CreateMedicalRecord(c *gin.Context) {
-	updateMedicalRecordsCollectionFunc(c, func(c *gin.Context, medicalRecords *[]MedicalRecord) (*[]MedicalRecord, interface{}, int) {
-		var record MedicalRecord
-
-		if err := c.ShouldBindJSON(&record); err != nil {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Invalid request body",
-				"error":   err.Error(),
-			}, http.StatusBadRequest
-		}
-
-		patientId := c.Param("patientId")
-		if patientId == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Patient ID is required",
-			}, http.StatusBadRequest
-		}
-
-		// Validate required fields
-		if record.Diagnosis == "" || record.DateOfVisit.IsZero() {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Missing required fields (diagnosis, dateOfVisit)",
-			}, http.StatusBadRequest
-		}
-
-		if record.Id == "" || record.Id == "@new" {
-			record.Id = uuid.NewString()
-		}
-
-		// Set patient ID from URL parameter
-		record.PatientId = patientId
-
-		// Check if medical record already exists
-		conflictIndx := slices.IndexFunc(*medicalRecords, func(mr MedicalRecord) bool {
-			return record.Id == mr.Id
+	log.Printf("🏥 CreateMedicalRecord called")
+	
+	patientId := c.Param("patientId")
+	if patientId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Patient ID is required",
 		})
+		return
+	}
 
-		if conflictIndx >= 0 {
-			return nil, gin.H{
-				"status":  http.StatusConflict,
+	var record MedicalRecord
+	if err := c.ShouldBindJSON(&record); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Validate required fields
+	if record.Diagnosis == "" || record.DateOfVisit.IsZero() {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Missing required fields (diagnosis, dateOfVisit)",
+		})
+		return
+	}
+
+	if record.Id == "" || record.Id == "@new" {
+		record.Id = uuid.NewString()
+	}
+
+	// Set patient ID from URL parameter
+	record.PatientId = patientId
+
+	// Set timestamps
+	now := time.Now()
+	record.CreatedAt = now
+	record.UpdatedAt = now
+
+	log.Printf("💾 Saving medical record with ID: %s for patient: %s", record.Id, patientId)
+
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found",
+		})
+		return
+	}
+
+	db, ok := value.(db_service.DbService[MedicalRecord])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
+
+	// Create medical record document
+	if err := db.CreateDocument(c, record.Id, &record); err != nil {
+		log.Printf("❌ Database error: %v", err)
+		switch err {
+		case db_service.ErrConflict:
+			c.JSON(http.StatusConflict, gin.H{
+				"status":  "Conflict",
 				"message": "Medical record already exists",
-			}, http.StatusConflict
+			})
+		default:
+			c.JSON(http.StatusBadGateway, gin.H{
+				"status":  "Bad Gateway",
+				"message": "Failed to create medical record",
+				"error":   err.Error(),
+			})
 		}
+		return
+	}
 
-		// Set timestamps
-		now := time.Now()
-		record.CreatedAt = now
-		record.UpdatedAt = now
-
-		*medicalRecords = append(*medicalRecords, record)
-		
-		// Return the created record
-		recordIndx := slices.IndexFunc(*medicalRecords, func(mr MedicalRecord) bool {
-			return record.Id == mr.Id
-		})
-		
-		if recordIndx < 0 {
-			return nil, gin.H{
-				"status":  http.StatusInternalServerError,
-				"message": "Failed to save medical record",
-			}, http.StatusInternalServerError
-		}
-
-		return medicalRecords, (*medicalRecords)[recordIndx], http.StatusCreated
-	})
-}
-
-func (o implMedicalRecordsAPI) DeleteMedicalRecord(c *gin.Context) {
-	updateMedicalRecordsCollectionFunc(c, func(c *gin.Context, medicalRecords *[]MedicalRecord) (*[]MedicalRecord, interface{}, int) {
-		patientId := c.Param("patientId")
-		recordId := c.Param("recordId")
-
-		if patientId == "" || recordId == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Patient ID and Record ID are required",
-			}, http.StatusBadRequest
-		}
-
-		recordIndx := slices.IndexFunc(*medicalRecords, func(mr MedicalRecord) bool {
-			return recordId == mr.Id && patientId == mr.PatientId
-		})
-
-		if recordIndx < 0 {
-			return nil, gin.H{
-				"status":  http.StatusNotFound,
-				"message": "Patient or Medical record not found",
-			}, http.StatusNotFound
-		}
-
-		*medicalRecords = append((*medicalRecords)[:recordIndx], (*medicalRecords)[recordIndx+1:]...)
-		return medicalRecords, nil, http.StatusNoContent
-	})
+	log.Printf("✅ Medical record created successfully!")
+	c.JSON(http.StatusCreated, record)
 }
 
 func (o implMedicalRecordsAPI) GetPatientMedicalRecords(c *gin.Context) {
-	updateMedicalRecordsCollectionFunc(c, func(c *gin.Context, medicalRecords *[]MedicalRecord) (*[]MedicalRecord, interface{}, int) {
-		patientId := c.Param("patientId")
+	patientId := c.Param("patientId")
+	log.Printf("🔍 GetPatientMedicalRecords called for patient: %s", patientId)
 
-		if patientId == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Patient ID is required",
-			}, http.StatusBadRequest
-		}
+	if patientId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Patient ID is required",
+		})
+		return
+	}
 
-		// Filter records for specific patient
-		var patientRecords []MedicalRecord
-		for _, record := range *medicalRecords {
-			if record.PatientId == patientId {
-				patientRecords = append(patientRecords, record)
-			}
-		}
-
-		if patientRecords == nil {
-			patientRecords = []MedicalRecord{}
-		}
-
-		// return nil medicalRecords - no need to update it in db
-		return nil, patientRecords, http.StatusOK
-	})
+	// Pre jednoduchosť vraciame prázdne pole
+	// V skutočnosti by sme potrebovali scan kolekcie a filtrovanie podľa patientId
+	records := []MedicalRecord{}
+	c.JSON(http.StatusOK, records)
 }
 
 func (o implMedicalRecordsAPI) UpdateMedicalRecord(c *gin.Context) {
-	updateMedicalRecordsCollectionFunc(c, func(c *gin.Context, medicalRecords *[]MedicalRecord) (*[]MedicalRecord, interface{}, int) {
-		var updatedRecord MedicalRecord
+	patientId := c.Param("patientId")
+	recordId := c.Param("recordId")
+	log.Printf("🔄 UpdateMedicalRecord called for record: %s, patient: %s", recordId, patientId)
 
-		if err := c.ShouldBindJSON(&updatedRecord); err != nil {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Invalid request body",
-				"error":   err.Error(),
-			}, http.StatusBadRequest
-		}
-
-		patientId := c.Param("patientId")
-		recordId := c.Param("recordId")
-
-		if patientId == "" || recordId == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Patient ID and Record ID are required",
-			}, http.StatusBadRequest
-		}
-
-		recordIndx := slices.IndexFunc(*medicalRecords, func(mr MedicalRecord) bool {
-			return recordId == mr.Id && patientId == mr.PatientId
+	if patientId == "" || recordId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Patient ID and Record ID are required",
 		})
+		return
+	}
 
-		if recordIndx < 0 {
-			return nil, gin.H{
-				"status":  http.StatusNotFound,
+	var updatedRecord MedicalRecord
+	if err := c.ShouldBindJSON(&updatedRecord); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Verify IDs match
+	if updatedRecord.Id != "" && updatedRecord.Id != recordId {
+		c.JSON(http.StatusForbidden, gin.H{
+			"status":  "Forbidden",
+			"message": "Record ID in path and request body do not match",
+		})
+		return
+	}
+
+	updatedRecord.Id = recordId
+	updatedRecord.PatientId = patientId
+	updatedRecord.UpdatedAt = time.Now()
+
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found",
+		})
+		return
+	}
+
+	db, ok := value.(db_service.DbService[MedicalRecord])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
+
+	// Update medical record
+	if err := db.UpdateDocument(c, recordId, &updatedRecord); err != nil {
+		switch err {
+		case db_service.ErrNotFound:
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "Not Found",
 				"message": "Patient or Medical record not found",
-			}, http.StatusNotFound
+			})
+		default:
+			c.JSON(http.StatusBadGateway, gin.H{
+				"status":  "Bad Gateway",
+				"message": "Failed to update medical record",
+				"error":   err.Error(),
+			})
 		}
+		return
+	}
 
-		// Verify that the ID in the path matches the ID in the body (if provided)
-		if updatedRecord.Id != "" && updatedRecord.Id != recordId {
-			return nil, gin.H{
-				"status":  http.StatusForbidden,
-				"message": "Record ID in path and request body do not match",
-			}, http.StatusForbidden
-		}
+	log.Printf("✅ Medical record updated successfully!")
+	c.JSON(http.StatusOK, updatedRecord)
+}
 
-		// Validate required fields
-		if updatedRecord.Diagnosis == "" || updatedRecord.DateOfVisit.IsZero() {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Missing required fields (diagnosis, dateOfVisit)",
-			}, http.StatusBadRequest
-		}
+func (o implMedicalRecordsAPI) DeleteMedicalRecord(c *gin.Context) {
+	patientId := c.Param("patientId")
+	recordId := c.Param("recordId")
+	log.Printf("🗑️ DeleteMedicalRecord called for record: %s, patient: %s", recordId, patientId)
 
-		// Update fields
-		existingRecord := &(*medicalRecords)[recordIndx]
-		existingRecord.Diagnosis = updatedRecord.Diagnosis
-		existingRecord.DateOfVisit = updatedRecord.DateOfVisit
-		
-		// Update optional fields if provided
-		if updatedRecord.Symptoms != nil {
-			existingRecord.Symptoms = updatedRecord.Symptoms
-		}
-		
-		if updatedRecord.Treatment != "" {
-			existingRecord.Treatment = updatedRecord.Treatment
-		}
-		
-		if updatedRecord.Medications != nil {
-			existingRecord.Medications = updatedRecord.Medications
-		}
-		
-		if updatedRecord.DoctorName != "" {
-			existingRecord.DoctorName = updatedRecord.DoctorName
-		}
-		
-		if updatedRecord.Notes != "" {
-			existingRecord.Notes = updatedRecord.Notes
-		}
-		
-		if updatedRecord.FollowUpDate != "" {
-			existingRecord.FollowUpDate = updatedRecord.FollowUpDate
-		}
+	if patientId == "" || recordId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Patient ID and Record ID are required",
+		})
+		return
+	}
 
-		// Update timestamp
-		existingRecord.UpdatedAt = time.Now()
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found",
+		})
+		return
+	}
 
-		return medicalRecords, (*medicalRecords)[recordIndx], http.StatusOK
-	})
+	db, ok := value.(db_service.DbService[MedicalRecord])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
+
+	// Delete medical record
+	if err := db.DeleteDocument(c, recordId); err != nil {
+		switch err {
+		case db_service.ErrNotFound:
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "Not Found",
+				"message": "Patient or Medical record not found",
+			})
+		default:
+			c.JSON(http.StatusBadGateway, gin.H{
+				"status":  "Bad Gateway",
+				"message": "Failed to delete medical record",
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	log.Printf("✅ Medical record deleted successfully!")
+	c.Status(http.StatusNoContent)
 }

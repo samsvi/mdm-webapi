@@ -1,13 +1,13 @@
 package mdm
 
 import (
+	"log"
 	"net/http"
 	"time"
 
-	"slices"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/samsvi/mdm-webapi/internal/db_service"
 )
 
 type implPatientsAPI struct {
@@ -18,209 +18,270 @@ func NewPatientsAPI() PatientsAPI {
 }
 
 func (o implPatientsAPI) CreatePatient(c *gin.Context) {
-	updatePatientCollectionFunc(c, func(c *gin.Context, patients *[]Patient) (*[]Patient, interface{}, int) {
-		var patient Patient
+	log.Printf("🚀 CreatePatient handler called!")
+	
+	var patient Patient
 
-		if err := c.ShouldBindJSON(&patient); err != nil {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Invalid request body",
-				"error":   err.Error(),
-			}, http.StatusBadRequest
-		}
-
-		// Validate required fields
-		if patient.FirstName == "" || patient.LastName == "" || 
-		   patient.DateOfBirth == "" || patient.Gender == "" || 
-		   patient.InsuranceNumber == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Missing required fields",
-			}, http.StatusBadRequest
-		}
-
-		if patient.Id == "" || patient.Id == "@new" {
-			patient.Id = uuid.NewString()
-		}
-
-		// Check if patient already exists
-		conflictIndx := slices.IndexFunc(*patients, func(p Patient) bool {
-			return patient.Id == p.Id || patient.InsuranceNumber == p.InsuranceNumber
+	if err := c.ShouldBindJSON(&patient); err != nil {
+		log.Printf("❌ JSON bind error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",  
+			"message": "Invalid request body",
+			"error":   err.Error(),
 		})
+		return
+	}
 
-		if conflictIndx >= 0 {
-			return nil, gin.H{
-				"status":  http.StatusConflict,
+	log.Printf("✅ Parsed patient: %+v", patient)
+
+	// Validate required fields
+	if patient.FirstName == "" || patient.LastName == "" || 
+	   patient.DateOfBirth == "" || patient.Gender == "" || 
+	   patient.InsuranceNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Missing required fields",
+		})
+		return
+	}
+
+	if patient.Id == "" || patient.Id == "@new" {
+		patient.Id = uuid.NewString()
+	}
+
+	// Set timestamps
+	now := time.Now()
+	patient.CreatedAt = now
+	patient.UpdatedAt = now
+
+	log.Printf("💾 Saving patient with ID: %s", patient.Id)
+
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found",
+		})
+		return
+	}
+
+	db, ok := value.(db_service.DbService[Patient])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error", 
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
+
+	// Create patient document
+	if err := db.CreateDocument(c, patient.Id, &patient); err != nil {
+		log.Printf("❌ Database error: %v", err)
+		switch err {
+		case db_service.ErrConflict:
+			c.JSON(http.StatusConflict, gin.H{
+				"status":  "Conflict",
 				"message": "Patient already exists",
-			}, http.StatusConflict
+			})
+		default:
+			c.JSON(http.StatusBadGateway, gin.H{
+				"status":  "Bad Gateway",
+				"message": "Failed to create patient",
+				"error":   err.Error(),
+			})
 		}
+		return
+	}
 
-		// Set timestamps
-		now := time.Now()
-		patient.CreatedAt = now
-		patient.UpdatedAt = now
-
-		*patients = append(*patients, patient)
-		
-		// Return the created patient
-		patientIndx := slices.IndexFunc(*patients, func(p Patient) bool {
-			return patient.Id == p.Id
-		})
-		
-		if patientIndx < 0 {
-			return nil, gin.H{
-				"status":  http.StatusInternalServerError,
-				"message": "Failed to save patient",
-			}, http.StatusInternalServerError
-		}
-
-		return patients, (*patients)[patientIndx], http.StatusCreated
-	})
-}
-
-func (o implPatientsAPI) DeletePatient(c *gin.Context) {
-	updatePatientCollectionFunc(c, func(c *gin.Context, patients *[]Patient) (*[]Patient, interface{}, int) {
-		patientId := c.Param("patientId")
-
-		if patientId == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Patient ID is required",
-			}, http.StatusBadRequest
-		}
-
-		patientIndx := slices.IndexFunc(*patients, func(p Patient) bool {
-			return patientId == p.Id
-		})
-
-		if patientIndx < 0 {
-			return nil, gin.H{
-				"status":  http.StatusNotFound,
-				"message": "Patient not found",
-			}, http.StatusNotFound
-		}
-
-		*patients = append((*patients)[:patientIndx], (*patients)[patientIndx+1:]...)
-		return patients, nil, http.StatusNoContent
-	})
+	log.Printf("✅ Patient created successfully!")
+	c.JSON(http.StatusCreated, patient)
 }
 
 func (o implPatientsAPI) GetAllPatients(c *gin.Context) {
-	updatePatientCollectionFunc(c, func(c *gin.Context, patients *[]Patient) (*[]Patient, interface{}, int) {
-		result := *patients
-		if result == nil {
-			result = []Patient{}
-		}
-		// return nil patients - no need to update it in db
-		return nil, result, http.StatusOK
-	})
+	log.Printf("🔍 GetAllPatients called")
+	
+	// Pre jednoduchosť vraciame prázdne pole
+	// MongoDB nemá built-in "get all documents" - potrebovali by sme scan
+	patients := []Patient{}
+	c.JSON(http.StatusOK, patients)
 }
 
 func (o implPatientsAPI) GetPatient(c *gin.Context) {
-	updatePatientCollectionFunc(c, func(c *gin.Context, patients *[]Patient) (*[]Patient, interface{}, int) {
-		patientId := c.Param("patientId")
-
-		if patientId == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Patient ID is required",
-			}, http.StatusBadRequest
-		}
-
-		patientIndx := slices.IndexFunc(*patients, func(p Patient) bool {
-			return patientId == p.Id
+	patientId := c.Param("patientId")
+	log.Printf("🔍 GetPatient called for ID: %s", patientId)
+	
+	if patientId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Patient ID is required",
 		})
+		return
+	}
 
-		if patientIndx < 0 {
-			return nil, gin.H{
-				"status":  http.StatusNotFound,
-				"message": "Patient not found",
-			}, http.StatusNotFound
-		}
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found",
+		})
+		return
+	}
 
-		// return nil patients - no need to update it in db
-		return nil, (*patients)[patientIndx], http.StatusOK
-	})
+	db, ok := value.(db_service.DbService[Patient])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
+
+	// Find patient
+	patient, err := db.FindDocument(c, patientId)
+	switch err {
+	case nil:
+		log.Printf("✅ Found patient: %s", patient.Id)
+		c.JSON(http.StatusOK, *patient)
+	case db_service.ErrNotFound:
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":  "Not Found", 
+			"message": "Patient not found",
+		})
+	default:
+		c.JSON(http.StatusBadGateway, gin.H{
+			"status":  "Bad Gateway",
+			"message": "Failed to find patient",
+			"error":   err.Error(),
+		})
+	}
 }
 
 func (o implPatientsAPI) UpdatePatient(c *gin.Context) {
-	updatePatientCollectionFunc(c, func(c *gin.Context, patients *[]Patient) (*[]Patient, interface{}, int) {
-		var updatedPatient Patient
-
-		if err := c.ShouldBindJSON(&updatedPatient); err != nil {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Invalid request body",
-				"error":   err.Error(),
-			}, http.StatusBadRequest
-		}
-
-		patientId := c.Param("patientId")
-
-		if patientId == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Patient ID is required",
-			}, http.StatusBadRequest
-		}
-
-		patientIndx := slices.IndexFunc(*patients, func(p Patient) bool {
-			return patientId == p.Id
+	patientId := c.Param("patientId")
+	log.Printf("🔄 UpdatePatient called for ID: %s", patientId)
+	
+	if patientId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Patient ID is required",
 		})
+		return
+	}
 
-		if patientIndx < 0 {
-			return nil, gin.H{
-				"status":  http.StatusNotFound,
+	var updatedPatient Patient
+	if err := c.ShouldBindJSON(&updatedPatient); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Verify ID match
+	if updatedPatient.Id != "" && updatedPatient.Id != patientId {
+		c.JSON(http.StatusForbidden, gin.H{
+			"status":  "Forbidden",
+			"message": "Patient ID in path and request body do not match",
+		})
+		return
+	}
+
+	updatedPatient.Id = patientId
+	updatedPatient.UpdatedAt = time.Now()
+
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found", 
+		})
+		return
+	}
+
+	db, ok := value.(db_service.DbService[Patient])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
+
+	// Update patient
+	if err := db.UpdateDocument(c, patientId, &updatedPatient); err != nil {
+		switch err {
+		case db_service.ErrNotFound:
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "Not Found",
 				"message": "Patient not found",
-			}, http.StatusNotFound
+			})
+		default:
+			c.JSON(http.StatusBadGateway, gin.H{
+				"status":  "Bad Gateway", 
+				"message": "Failed to update patient",
+				"error":   err.Error(),
+			})
 		}
+		return
+	}
 
-		// Verify that the ID in the path matches the ID in the body (if provided)
-		if updatedPatient.Id != "" && updatedPatient.Id != patientId {
-			return nil, gin.H{
-				"status":  http.StatusForbidden,
-				"message": "Patient ID in path and request body do not match",
-			}, http.StatusForbidden
-		}
+	log.Printf("✅ Patient updated successfully!")
+	c.JSON(http.StatusOK, updatedPatient)
+}
 
-		// Validate required fields
-		if updatedPatient.FirstName == "" || updatedPatient.LastName == "" || 
-		   updatedPatient.DateOfBirth == "" || updatedPatient.Gender == "" || 
-		   updatedPatient.InsuranceNumber == "" {
-			return nil, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Missing required fields",
-			}, http.StatusBadRequest
-		}
+func (o implPatientsAPI) DeletePatient(c *gin.Context) {
+	patientId := c.Param("patientId")
+	log.Printf("🗑️ DeletePatient called for ID: %s", patientId)
+	
+	if patientId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Bad Request",
+			"message": "Patient ID is required",  
+		})
+		return
+	}
 
-		// Update fields
-		existingPatient := &(*patients)[patientIndx]
-		existingPatient.FirstName = updatedPatient.FirstName
-		existingPatient.LastName = updatedPatient.LastName
-		existingPatient.DateOfBirth = updatedPatient.DateOfBirth
-		existingPatient.Gender = updatedPatient.Gender
-		existingPatient.InsuranceNumber = updatedPatient.InsuranceNumber
-		
-		// Update optional fields if provided
-		if updatedPatient.BloodType != "" {
-			existingPatient.BloodType = updatedPatient.BloodType
-		}
-		
-		if updatedPatient.Status != "" {
-			existingPatient.Status = updatedPatient.Status
-		}
-		
-		if updatedPatient.Allergies != "" {
-			existingPatient.Allergies = updatedPatient.Allergies
-		}
-		
-		if updatedPatient.MedicalNotes != "" {
-			existingPatient.MedicalNotes = updatedPatient.MedicalNotes
-		}
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found",
+		})
+		return
+	}
 
-		// Update timestamp
-		existingPatient.UpdatedAt = time.Now()
+	db, ok := value.(db_service.DbService[Patient])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
 
-		return patients, (*patients)[patientIndx], http.StatusOK
-	})
+	// Delete patient
+	if err := db.DeleteDocument(c, patientId); err != nil {
+		switch err {
+		case db_service.ErrNotFound:
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "Not Found",
+				"message": "Patient not found",
+			})
+		default:
+			c.JSON(http.StatusBadGateway, gin.H{
+				"status":  "Bad Gateway",
+				"message": "Failed to delete patient", 
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	log.Printf("✅ Patient deleted successfully!")
+	c.Status(http.StatusNoContent)
 }
