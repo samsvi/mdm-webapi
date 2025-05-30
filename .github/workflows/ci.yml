@@ -35,7 +35,7 @@ jobs:
         additional-properties: apiPath=internal/mdm,packageName=mdm,interfaceOnly=true
 
     - name: Build
-      run: go build -v ./cmd/mdm-service
+      run: go build -v ./cmd/mdm-api-service
 
     - name: Test
       run: go test -v ./...
