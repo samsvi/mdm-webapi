@@ -1,0 +1,5 @@
+internal/mdm/api_*
+internal/mdm/model_*
+internal/mdm/routers.go
+build/
+deployments/
