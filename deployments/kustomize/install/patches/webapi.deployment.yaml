@@ -1,59 +1,59 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sses-ambulance-webapi
+  name: mdm-webapi
 spec:
   template:
     spec:
       initContainers:
         - name: init-mongodb
           env:
-            - name: AMBULANCE_API_MONGODB_HOST
+            - name: MDM_API_MONGODB_HOST
               value: null
               valueFrom:
                 configMapKeyRef:
                   name: mongodb-connection
                   key: host
-            - name: AMBULANCE_API_MONGODB_PORT
+            - name: MDM_API_MONGODB_PORT
               value: null
               valueFrom:
                 configMapKeyRef:
                   name: mongodb-connection
                   key: port
-            - name: AMBULANCE_API_MONGODB_USERNAME
+            - name: MDM_API_MONGODB_USERNAME
               value: null
               valueFrom:
                 secretKeyRef:
                   name: mongodb-auth
                   key: username
-            - name: AMBULANCE_API_MONGODB_PASSWORD
+            - name: MDM_API_MONGODB_PASSWORD
               value: null
               valueFrom:
                 secretKeyRef:
                   name: mongodb-auth
                   key: password
       containers:
-        - name: sses-ambulance-wl-webapi-container
+        - name: mdm-webapi-container
           env:
-            - name: AMBULANCE_API_MONGODB_HOST
+            - name: MDM_API_MONGODB_HOST
               value: null
               valueFrom:
                 configMapKeyRef:
                   name: mongodb-connection
                   key: host
-            - name: AMBULANCE_API_MONGODB_PORT
+            - name: MDM_API_MONGODB_PORT
               value: null
               valueFrom:
                 configMapKeyRef:
                   name: mongodb-connection
                   key: port
-            - name: AMBULANCE_API_MONGODB_USERNAME
+            - name: MDM_API_MONGODB_USERNAME
               value: null
               valueFrom:
                 secretKeyRef:
                   name: mongodb-auth
                   key: username
-            - name: AMBULANCE_API_MONGODB_PASSWORD
+            - name: MDM_API_MONGODB_PASSWORD
               value: null
               valueFrom:
                 secretKeyRef:
