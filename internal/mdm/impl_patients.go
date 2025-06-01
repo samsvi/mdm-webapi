@@ -101,9 +101,38 @@ func (o implPatientsAPI) CreatePatient(c *gin.Context) {
 func (o implPatientsAPI) GetAllPatients(c *gin.Context) {
 	log.Printf("🔍 GetAllPatients called")
 	
-	// Pre jednoduchosť vraciame prázdne pole
-	// MongoDB nemá built-in "get all documents" - potrebovali by sme scan
-	patients := []Patient{}
+	// Get db service
+	value, exists := c.Get("db_service")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service not found",
+		})
+		return
+	}
+
+	db, ok := value.(db_service.DbService[Patient])
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "Internal Server Error",
+			"message": "db_service context is not of correct type",
+		})
+		return
+	}
+
+	// Get all patients using db service
+	patients, err := db.FindAllDocuments(c)
+	if err != nil {
+		log.Printf("❌ Error finding patients: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{
+			"status":  "Bad Gateway",
+			"message": "Failed to retrieve patients",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	log.Printf("✅ Found %d patients", len(patients))
 	c.JSON(http.StatusOK, patients)
 }
 

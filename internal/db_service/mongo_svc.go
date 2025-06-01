@@ -17,6 +17,7 @@ import (
 
 type DbService[DocType interface{}] interface {
 	CreateDocument(ctx context.Context, id string, document *DocType) error
+	FindAllDocuments(ctx context.Context) ([]DocType, error) 
 	FindDocument(ctx context.Context, id string) (*DocType, error)
 	UpdateDocument(ctx context.Context, id string, document *DocType) error
 	DeleteDocument(ctx context.Context, id string) error
@@ -176,6 +177,39 @@ func (m *mongoSvc[DocType]) CreateDocument(ctx context.Context, id string, docum
 
 	_, err = collection.InsertOne(ctx, document)
 	return err
+}
+
+func (m *mongoSvc[DocType]) FindAllDocuments(ctx context.Context) ([]DocType, error) {
+	ctx, contextCancel := context.WithTimeout(ctx, m.Timeout)
+	defer contextCancel()
+	
+	client, err := m.connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	db := client.Database(m.DbName)
+	collection := db.Collection(m.Collection)
+	
+	// Find all documents
+	cursor, err := collection.Find(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	
+	// Decode all documents
+	var documents []DocType
+	if err = cursor.All(ctx, &documents); err != nil {
+		return nil, err
+	}
+	
+	// Return empty slice if no documents found
+	if documents == nil {
+		documents = []DocType{}
+	}
+	
+	return documents, nil
 }
 
 func (m *mongoSvc[DocType]) FindDocument(ctx context.Context, id string) (*DocType, error) {
