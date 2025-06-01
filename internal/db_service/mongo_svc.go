@@ -19,6 +19,7 @@ type DbService[DocType interface{}] interface {
 	CreateDocument(ctx context.Context, id string, document *DocType) error
 	FindAllDocuments(ctx context.Context) ([]DocType, error) 
 	FindDocument(ctx context.Context, id string) (*DocType, error)
+	FindDocumentsByFilter(ctx context.Context, filter bson.M) ([]DocType, error)
 	UpdateDocument(ctx context.Context, id string, document *DocType) error
 	DeleteDocument(ctx context.Context, id string) error
 	Disconnect(ctx context.Context) error
@@ -41,6 +42,39 @@ type mongoSvc[DocType interface{}] struct {
 	MongoServiceConfig
 	client     atomic.Pointer[mongo.Client]
 	clientLock sync.Mutex
+}
+
+func (m *mongoSvc[DocType]) FindDocumentsByFilter(ctx context.Context, filter bson.M) ([]DocType, error) {
+	ctx, contextCancel := context.WithTimeout(ctx, m.Timeout)
+	defer contextCancel()
+	
+	client, err := m.connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	db := client.Database(m.DbName)
+	collection := db.Collection(m.Collection)
+	
+	// Find documents with filter
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	
+	// Decode all documents
+	var documents []DocType
+	if err = cursor.All(ctx, &documents); err != nil {
+		return nil, err
+	}
+	
+	// Return empty slice if no documents found
+	if documents == nil {
+		documents = []DocType{}
+	}
+	
+	return documents, nil
 }
 
 func NewMongoService[DocType interface{}](config MongoServiceConfig) DbService[DocType] {

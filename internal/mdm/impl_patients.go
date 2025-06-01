@@ -1,7 +1,6 @@
 package mdm
 
 import (
-	"log"
 	"net/http"
 	"time"
 
@@ -18,12 +17,9 @@ func NewPatientsAPI() PatientsAPI {
 }
 
 func (o implPatientsAPI) CreatePatient(c *gin.Context) {
-	log.Printf("🚀 CreatePatient handler called!")
-	
 	var patient Patient
 
 	if err := c.ShouldBindJSON(&patient); err != nil {
-		log.Printf("❌ JSON bind error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "Bad Request",  
 			"message": "Invalid request body",
@@ -32,9 +28,6 @@ func (o implPatientsAPI) CreatePatient(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Parsed patient: %+v", patient)
-
-	// Validate required fields
 	if patient.FirstName == "" || patient.LastName == "" || 
 	   patient.DateOfBirth == "" || patient.Gender == "" || 
 	   patient.InsuranceNumber == "" {
@@ -49,14 +42,10 @@ func (o implPatientsAPI) CreatePatient(c *gin.Context) {
 		patient.Id = uuid.NewString()
 	}
 
-	// Set timestamps
 	now := time.Now()
 	patient.CreatedAt = now
 	patient.UpdatedAt = now
 
-	log.Printf("💾 Saving patient with ID: %s", patient.Id)
-
-	// Get db service
 	value, exists := c.Get("db_service")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -75,9 +64,7 @@ func (o implPatientsAPI) CreatePatient(c *gin.Context) {
 		return
 	}
 
-	// Create patient document
 	if err := db.CreateDocument(c, patient.Id, &patient); err != nil {
-		log.Printf("❌ Database error: %v", err)
 		switch err {
 		case db_service.ErrConflict:
 			c.JSON(http.StatusConflict, gin.H{
@@ -94,14 +81,10 @@ func (o implPatientsAPI) CreatePatient(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Patient created successfully!")
 	c.JSON(http.StatusCreated, patient)
 }
 
 func (o implPatientsAPI) GetAllPatients(c *gin.Context) {
-	log.Printf("🔍 GetAllPatients called")
-	
-	// Get db service
 	value, exists := c.Get("db_service")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -120,10 +103,8 @@ func (o implPatientsAPI) GetAllPatients(c *gin.Context) {
 		return
 	}
 
-	// Get all patients using db service
 	patients, err := db.FindAllDocuments(c)
 	if err != nil {
-		log.Printf("❌ Error finding patients: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{
 			"status":  "Bad Gateway",
 			"message": "Failed to retrieve patients",
@@ -132,13 +113,11 @@ func (o implPatientsAPI) GetAllPatients(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Found %d patients", len(patients))
 	c.JSON(http.StatusOK, patients)
 }
 
 func (o implPatientsAPI) GetPatient(c *gin.Context) {
 	patientId := c.Param("patientId")
-	log.Printf("🔍 GetPatient called for ID: %s", patientId)
 	
 	if patientId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -148,7 +127,6 @@ func (o implPatientsAPI) GetPatient(c *gin.Context) {
 		return
 	}
 
-	// Get db service
 	value, exists := c.Get("db_service")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -167,11 +145,9 @@ func (o implPatientsAPI) GetPatient(c *gin.Context) {
 		return
 	}
 
-	// Find patient
 	patient, err := db.FindDocument(c, patientId)
 	switch err {
 	case nil:
-		log.Printf("✅ Found patient: %s", patient.Id)
 		c.JSON(http.StatusOK, *patient)
 	case db_service.ErrNotFound:
 		c.JSON(http.StatusNotFound, gin.H{
@@ -189,7 +165,6 @@ func (o implPatientsAPI) GetPatient(c *gin.Context) {
 
 func (o implPatientsAPI) UpdatePatient(c *gin.Context) {
 	patientId := c.Param("patientId")
-	log.Printf("🔄 UpdatePatient called for ID: %s", patientId)
 	
 	if patientId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -209,7 +184,6 @@ func (o implPatientsAPI) UpdatePatient(c *gin.Context) {
 		return
 	}
 
-	// Verify ID match
 	if updatedPatient.Id != "" && updatedPatient.Id != patientId {
 		c.JSON(http.StatusForbidden, gin.H{
 			"status":  "Forbidden",
@@ -221,7 +195,6 @@ func (o implPatientsAPI) UpdatePatient(c *gin.Context) {
 	updatedPatient.Id = patientId
 	updatedPatient.UpdatedAt = time.Now()
 
-	// Get db service
 	value, exists := c.Get("db_service")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -240,7 +213,6 @@ func (o implPatientsAPI) UpdatePatient(c *gin.Context) {
 		return
 	}
 
-	// Update patient
 	if err := db.UpdateDocument(c, patientId, &updatedPatient); err != nil {
 		switch err {
 		case db_service.ErrNotFound:
@@ -258,13 +230,11 @@ func (o implPatientsAPI) UpdatePatient(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Patient updated successfully!")
 	c.JSON(http.StatusOK, updatedPatient)
 }
 
 func (o implPatientsAPI) DeletePatient(c *gin.Context) {
 	patientId := c.Param("patientId")
-	log.Printf("🗑️ DeletePatient called for ID: %s", patientId)
 	
 	if patientId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -274,7 +244,6 @@ func (o implPatientsAPI) DeletePatient(c *gin.Context) {
 		return
 	}
 
-	// Get db service
 	value, exists := c.Get("db_service")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -293,7 +262,6 @@ func (o implPatientsAPI) DeletePatient(c *gin.Context) {
 		return
 	}
 
-	// Delete patient
 	if err := db.DeleteDocument(c, patientId); err != nil {
 		switch err {
 		case db_service.ErrNotFound:
@@ -311,6 +279,5 @@ func (o implPatientsAPI) DeletePatient(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Patient deleted successfully!")
 	c.Status(http.StatusNoContent)
 }
