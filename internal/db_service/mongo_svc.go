@@ -19,7 +19,7 @@ type DbService[DocType interface{}] interface {
 	CreateDocument(ctx context.Context, id string, document *DocType) error
 	FindAllDocuments(ctx context.Context) ([]DocType, error) 
 	FindDocument(ctx context.Context, id string) (*DocType, error)
-	FindDocumentsByFilter(ctx context.Context, filter bson.M) ([]DocType, error)
+	FindDocumentsByCondition(ctx context.Context, filter bson.M) ([]DocType, error)
 	UpdateDocument(ctx context.Context, id string, document *DocType) error
 	DeleteDocument(ctx context.Context, id string) error
 	Disconnect(ctx context.Context) error
@@ -44,7 +44,7 @@ type mongoSvc[DocType interface{}] struct {
 	clientLock sync.Mutex
 }
 
-func (m *mongoSvc[DocType]) FindDocumentsByFilter(ctx context.Context, filter bson.M) ([]DocType, error) {
+func (m *mongoSvc[DocType]) FindDocumentsByCondition(ctx context.Context, filter bson.M) ([]DocType, error) {
 	ctx, contextCancel := context.WithTimeout(ctx, m.Timeout)
 	defer contextCancel()
 	

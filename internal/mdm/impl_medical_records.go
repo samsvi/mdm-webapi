@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/samsvi/mdm-webapi/internal/db_service"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type implMedicalRecordsAPI struct {
@@ -54,7 +55,6 @@ func (o implMedicalRecordsAPI) CreateMedicalRecord(c *gin.Context) {
 	now := time.Now()
 	record.CreatedAt = now
 	record.UpdatedAt = now
-
 
 	value, exists := c.Get("db_service")
 	if !exists {
@@ -123,9 +123,9 @@ func (o implMedicalRecordsAPI) GetPatientMedicalRecords(c *gin.Context) {
 		return
 	}
 
-	records, err := db.FindDocumentsByCondition(c, func(record MedicalRecord) bool {
-		return record.PatientId == patientId
-	})
+	// Use bson.M filter instead of function
+	filter := bson.M{"patientId": patientId}
+	records, err := db.FindDocumentsByCondition(c, filter)
 	
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{
