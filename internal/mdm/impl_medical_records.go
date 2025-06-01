@@ -124,7 +124,7 @@ func (o implMedicalRecordsAPI) GetPatientMedicalRecords(c *gin.Context) {
 	}
 
 	// Use bson.M filter instead of function
-	filter := bson.M{"patientId": patientId}
+	filter := bson.M{"patientid": patientId}
 	records, err := db.FindDocumentsByCondition(c, filter)
 	
 	if err != nil {
